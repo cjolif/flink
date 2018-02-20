@@ -53,7 +53,12 @@ of the Elasticsearch installation:
     <tr>
         <td>flink-connector-elasticsearch5{{ site.scala_version_suffix }}</td>
         <td>1.3.0</td>
-        <td>5.x</td>
+        <td>5.0 to 5.2</td>
+    </tr>
+    <tr>
+        <td>flink-connector-elasticsearch-rest{{ site.scala_version_suffix }}</td>
+        <td>1.5.0</td>
+        <td>6.1+</td>
     </tr>
   </tbody>
 </table>
@@ -71,8 +76,8 @@ creating an `ElasticsearchSink` for requesting document actions against your clu
 
 ## Elasticsearch Sink
 
-The `ElasticsearchSink` uses a `TransportClient` to communicate with an
-Elasticsearch cluster.
+The `ElasticsearchSink` uses a `TransportClient` (before 6.x) or `RestHighLevelClient` (starting with 6.x) to communicate 
+with an Elasticsearch cluster.
 
 The example below shows how to configure and create a sink:
 
@@ -122,6 +127,31 @@ transportAddresses.add(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),
 transportAddresses.add(new InetSocketAddress(InetAddress.getByName("10.2.3.1"), 9300));
 
 input.addSink(new ElasticsearchSink<>(config, transportAddresses, new ElasticsearchSinkFunction<String>() {
+    public IndexRequest createIndexRequest(String element) {
+        Map<String, String> json = new HashMap<>();
+        json.put("data", element);
+    
+        return Requests.indexRequest()
+                .index("my-index")
+                .type("my-type")
+                .source(json);
+    }
+    
+    @Override
+    public void process(String element, RuntimeContext ctx, RequestIndexer indexer) {
+        indexer.add(createIndexRequest(element));
+    }
+}));{% endhighlight %}
+</div>
+<div data-lang="java, Elasticsearch 6.1+" markdown="1">
+{% highlight java %}
+DataStream<String> input = ...;
+
+List<HttpHost> httpHost = new ArrayList<>();
+httpHosts.add(new HttpHost("127.0.0.1", 9200, "http"));
+httpHosts.add(new HttpHost("10.2.3.1", 9200, "http"));
+
+input.addSink(new ElasticsearchSink<>(httpHosts, new ElasticsearchSinkFunction<String>() {
     public IndexRequest createIndexRequest(String element) {
         Map<String, String> json = new HashMap<>();
         json.put("data", element);
@@ -190,10 +220,31 @@ input.addSink(new ElasticsearchSink(config, transportAddresses, new Elasticsearc
 }))
 {% endhighlight %}
 </div>
+<div data-lang="scala, Elasticsearch 6.1+" markdown="1">
+{% highlight scala %}
+val input: DataStream[String] = ...
+
+val httpHosts = new java.util.ArrayList[HttpHost]
+httpHosts.add(new HttpHost("127.0.0.1", 9300, "http"))
+httpHosts.add(new HttpHost("10.2.3.1", 9300, "http"))
+
+input.addSink(new ElasticsearchSink(httpHosts, new ElasticsearchSinkFunction[String] {
+  def createIndexRequest(element: String): IndexRequest = {
+    val json = new java.util.HashMap[String, String]
+    json.put("data", element)
+    
+    return Requests.indexRequest()
+            .index("my-index")
+            .type("my-type")
+            .source(json)
+  }
+}))
+{% endhighlight %}
+</div>
 </div>
 
 Note how a `Map` of `String`s is used to configure the `ElasticsearchSink`.
-The configuration keys are documented in the Elasticsearch documentation
+For the `TransportClient` based version, the configuration keys are documented in the Elasticsearch documentation
 [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html).
 Especially important is the `cluster.name` parameter that must correspond to
 the name of your cluster.
