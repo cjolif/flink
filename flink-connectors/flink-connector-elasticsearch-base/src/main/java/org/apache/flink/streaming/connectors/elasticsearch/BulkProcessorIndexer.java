@@ -60,8 +60,6 @@ class BulkProcessorIndexer extends RequestIndexer {
 	@Override
 	public void add(IndexRequest... indexRequests) {
 		for (IndexRequest indexRequest : indexRequests) {
-			System.out.println("ir: " + indexRequest);
-
 			if (flushOnCheckpoint) {
 				numPendingRequestsRef.getAndIncrement();
 			}
